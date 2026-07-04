@@ -696,8 +696,9 @@
 
   // ---------- Persistence ----------
   function load(){
+    let raw = null;
     try{
-      const raw = localStorage.getItem(STORAGE_KEY);
+      raw = localStorage.getItem(STORAGE_KEY);
       if(raw){ state = JSON.parse(raw); }
     }catch(e){ console.warn("Impossibile leggere i dati salvati", e); }
     if(!state.habits) state.habits = [];
@@ -713,7 +714,10 @@
       if(rawProfile) profile = JSON.parse(rawProfile);
     }catch(e){ /* ignore */ }
 
-    if(state.habits.length === 0){
+    // Seed demo habits only the very first time the app is ever opened
+    // (i.e. no saved data exists yet) — never again afterwards, even if
+    // the user later deletes all their habits or resets their data.
+    if(raw === null){
       seedDemo();
     }
   }
