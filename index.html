@@ -254,6 +254,15 @@
   .heatmap-legend .hm-cell{ width:10px;height:10px; cursor:default; }
   .heatmap-legend .hm-cell:hover{ transform:none; }
 
+  .heatmap-card.clickable{ cursor:pointer; transition:border-color .15s ease; }
+  .heatmap-card.clickable:hover{ border-color:var(--accent); }
+  .week-strip{ display:flex; gap:10px; justify-content:space-between; flex-wrap:wrap; }
+  .week-day{ display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; min-width:36px; }
+  .week-day .wd-label{ font-size:10.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.03em; }
+  .week-day .wd-cell{ width:100%; max-width:44px; aspect-ratio:1; border-radius:10px; background:var(--border-soft); }
+  .week-day .wd-date{ font-size:10px; color:var(--text-faint); }
+  .week-day.today .wd-label{ color:var(--accent); font-weight:700; }
+
   /* ---------- Habit cards ---------- */
   .habits-grid{
     display:grid;
@@ -502,20 +511,12 @@
     <div class="brand">
       <div class="brand-mark">🔥</div>
       <div class="brand-text">
-        <h1>Ember</h1>
-        <span id="greetingLine">tieni viva la tua costanza</span>
+        <h1 id="greetingLine">Stai spaccando anche oggi?</h1>
       </div>
       <button class="btn btn-ghost btn-icon" id="editProfileBtn" title="Modifica profilo" style="margin-left:2px;">✏️</button>
     </div>
     <div class="topbar-actions">
-      <select id="themeSelect" class="select" title="Tema colore">
-        <option value="ember">Ember</option>
-        <option value="teal">Teal</option>
-        <option value="violet">Violet</option>
-        <option value="rose">Rose</option>
-        <option value="light">Chiaro</option>
-      </select>
-      <button class="btn btn-icon" id="menuBtn" title="Esporta / Backup">⚙️</button>
+      <button class="btn btn-icon" id="menuBtn" title="Impostazioni">⚙️</button>
       <button class="btn btn-primary" id="addHabitBtn">+ Nuova abitudine</button>
     </div>
   </div>
@@ -523,17 +524,11 @@
   <div class="stats-grid" id="statsGrid"></div>
 
   <div class="section-head">
-    <h2>📅 Attività dell'anno</h2>
-    <span class="hint" id="heatmapYearLabel"></span>
+    <h2>📅 Attività della settimana</h2>
+    <span class="hint" id="weekRangeLabel"></span>
   </div>
-  <div class="heatmap-card">
-    <div class="heatmap-scroll">
-      <div class="heatmap-months" id="globalMonths"></div>
-      <div class="heatmap-body">
-        <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
-        <div class="heatmap-grid" id="globalHeatmap"></div>
-      </div>
-    </div>
+  <div class="heatmap-card clickable" id="weekHeatmapCard" title="Clicca per vedere il dettaglio del mese e dell'anno">
+    <div class="week-strip" id="weekStrip"></div>
     <div class="heatmap-legend">
       <span>meno</span>
       <div class="hm-cell" style="background:var(--border-soft)"></div>
@@ -617,8 +612,18 @@
 <div class="modal-overlay" id="dataModalOverlay">
   <div class="modal">
     <div class="modal-head">
-      <h3>Dati &amp; backup</h3>
+      <h3>Impostazioni</h3>
       <button class="modal-close" id="closeDataModal">✕</button>
+    </div>
+    <div class="field">
+      <label>Tema colore</label>
+      <select id="themeSelect" class="select" style="width:100%;">
+        <option value="ember">Ember</option>
+        <option value="teal">Teal</option>
+        <option value="violet">Violet</option>
+        <option value="rose">Rose</option>
+        <option value="light">Chiaro</option>
+      </select>
     </div>
     <p style="font-size:13px;color:var(--text-dim);margin-top:0;">Tutti i dati sono salvati solo in questo browser (localStorage). Esporta regolarmente un backup.</p>
     <div class="modal-actions" style="flex-direction:column;">
@@ -647,6 +652,36 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="saveProfileBtn" style="width:100%;">Continua</button>
+    </div>
+  </div>
+</div>
+
+<!-- Activity Detail Modal (month + year) -->
+<div class="modal-overlay" id="activityDetailModalOverlay">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <h3>📊 Dettaglio attività</h3>
+      <button class="modal-close" id="closeActivityDetailModal">✕</button>
+    </div>
+    <div class="heat-wrap">
+      <h4>Questo mese · <span id="activityMonthLabel"></span></h4>
+      <div class="heatmap-scroll" style="overflow-x:auto;">
+        <div class="heatmap-months" id="activityMonthMonths"></div>
+        <div class="heatmap-body">
+          <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
+          <div class="heatmap-grid" id="activityMonthHeatmap"></div>
+        </div>
+      </div>
+    </div>
+    <div class="heat-wrap">
+      <h4>Quest'anno · <span id="activityYearLabel"></span></h4>
+      <div class="heatmap-scroll" style="overflow-x:auto;">
+        <div class="heatmap-months" id="activityYearMonths"></div>
+        <div class="heatmap-body">
+          <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
+          <div class="heatmap-grid" id="activityYearHeatmap"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -892,22 +927,29 @@
     }
   }
 
-  function renderGlobalHeatmap(){
-    const year = new Date().getFullYear();
-    document.getElementById("heatmapYearLabel").textContent = year;
-    const days = buildYearDays(year);
-    const container = document.getElementById("globalHeatmap");
-    container.innerHTML = "";
+  function buildMonthDays(year, month){
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month+1, 0);
+    const startDow = (start.getDay() + 6) % 7;
+    const gridStart = addDays(start, -startDow);
+    const endDow = (end.getDay() + 6) % 7;
+    const gridEnd = addDays(end, 6-endDow);
+    const days = [];
+    let d = gridStart;
+    while(d <= gridEnd){ days.push(new Date(d)); d = addDays(d,1); }
+    return days;
+  }
+
+  function renderHeatmapRange(monthsEl, gridEl, days, year, inRangeFn){
+    renderMonthsRow(monthsEl, days, year);
+    gridEl.innerHTML = "";
     const totalHabits = state.habits.length || 1;
     const today = new Date(); today.setHours(0,0,0,0);
-
-    renderMonthsRow(document.getElementById("globalMonths"), days, year);
-
     days.forEach(d=>{
       const cell = document.createElement("div");
       cell.className = "hm-cell";
       if(d > today) cell.classList.add("future");
-      if(d.getFullYear() === year){
+      if(inRangeFn(d)){
         const key = fmtDate(d);
         let done = 0;
         state.habits.forEach(h=>{ if(h.completions[key]) done++; });
@@ -917,8 +959,86 @@
       } else {
         cell.style.background = "transparent";
       }
-      container.appendChild(cell);
+      gridEl.appendChild(cell);
     });
+  }
+
+  function renderWeekStrip(){
+    const container = document.getElementById("weekStrip");
+    container.innerHTML = "";
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dow = (today.getDay() + 6) % 7;
+    const monday = addDays(today, -dow);
+    const labels = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
+    const totalHabits = state.habits.length || 1;
+
+    for(let i=0;i<7;i++){
+      const d = addDays(monday, i);
+      const key = fmtDate(d);
+      let done = 0;
+      state.habits.forEach(h=>{ if(h.completions[key]) done++; });
+      const ratio = done / totalHabits;
+
+      const wrap = document.createElement("div");
+      wrap.className = "week-day" + (fmtDate(d)===fmtDate(today) ? " today" : "");
+
+      const label = document.createElement("span");
+      label.className = "wd-label";
+      label.textContent = labels[i];
+      wrap.appendChild(label);
+
+      const cell = document.createElement("div");
+      cell.className = "wd-cell";
+      if(d > today){
+        cell.style.background = "transparent";
+        cell.style.border = "1.5px dashed var(--border)";
+      } else {
+        cell.style.background = intensityColor(ratio);
+      }
+      cell.title = `${d.toLocaleDateString("it-IT")} — ${done}/${totalHabits} abitudini`;
+      wrap.appendChild(cell);
+
+      const dateLabel = document.createElement("span");
+      dateLabel.className = "wd-date";
+      dateLabel.textContent = d.getDate();
+      wrap.appendChild(dateLabel);
+
+      container.appendChild(wrap);
+    }
+
+    document.getElementById("weekRangeLabel").textContent =
+      monday.toLocaleDateString("it-IT",{day:"numeric",month:"short"}) + " – " + addDays(monday,6).toLocaleDateString("it-IT",{day:"numeric",month:"short"});
+  }
+
+  function openActivityDetailModal(){
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+
+    document.getElementById("activityMonthLabel").textContent = MONTHS_IT[month] + " " + year;
+    document.getElementById("activityYearLabel").textContent = year;
+
+    const monthDays = buildMonthDays(year, month);
+    renderHeatmapRange(
+      document.getElementById("activityMonthMonths"),
+      document.getElementById("activityMonthHeatmap"),
+      monthDays, year,
+      d => d.getFullYear()===year && d.getMonth()===month
+    );
+
+    const yearDays = buildYearDays(year);
+    renderHeatmapRange(
+      document.getElementById("activityYearMonths"),
+      document.getElementById("activityYearHeatmap"),
+      yearDays, year,
+      d => d.getFullYear()===year
+    );
+
+    document.getElementById("activityDetailModalOverlay").classList.add("open");
+  }
+
+  function closeActivityDetailModal(){
+    document.getElementById("activityDetailModalOverlay").classList.remove("open");
   }
 
   function renderMiniHeatmap(habit, container, weeksCount){
@@ -1289,20 +1409,12 @@
     try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); }catch(e){}
   }
 
-  function timeGreeting(){
-    const h = new Date().getHours();
-    if(h < 6) return "Nottataccia";
-    if(h < 12) return "Buongiorno";
-    if(h < 18) return "Buon pomeriggio";
-    return "Buonasera";
-  }
-
   function renderGreeting(){
     const el = document.getElementById("greetingLine");
     if(profile.name){
-      el.textContent = `${timeGreeting()}, ${profile.name} 👋`;
+      el.textContent = `${profile.name}, stai spaccando anche oggi?`;
     } else {
-      el.textContent = "tieni viva la tua costanza";
+      el.textContent = "Stai spaccando anche oggi?";
     }
   }
 
@@ -1337,7 +1449,7 @@
   // ---------- Wire up ----------
   function renderAll(){
     renderStats();
-    renderGlobalHeatmap();
+    renderWeekStrip();
     renderHabits();
   }
 
@@ -1365,6 +1477,10 @@
     document.getElementById("closeDetailModal").addEventListener("click", closeDetailModal);
     document.getElementById("detailModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="detailModalOverlay") closeDetailModal(); });
 
+    document.getElementById("weekHeatmapCard").addEventListener("click", openActivityDetailModal);
+    document.getElementById("closeActivityDetailModal").addEventListener("click", closeActivityDetailModal);
+    document.getElementById("activityDetailModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="activityDetailModalOverlay") closeActivityDetailModal(); });
+
     document.getElementById("menuBtn").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.add("open"));
     document.getElementById("closeDataModal").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.remove("open"));
     document.getElementById("dataModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="dataModalOverlay") e.currentTarget.classList.remove("open"); });
@@ -1384,7 +1500,7 @@
 
     document.addEventListener("keydown", (e)=>{
       if(e.key === "Escape"){
-        closeHabitModal(); closeDetailModal();
+        closeHabitModal(); closeDetailModal(); closeActivityDetailModal();
         document.getElementById("dataModalOverlay").classList.remove("open");
         if(document.getElementById("profileModalOverlay").dataset.onboarding !== "1"){
           closeProfileModal();
