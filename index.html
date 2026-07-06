@@ -262,6 +262,11 @@
   .week-day .wd-cell{ width:100%; max-width:44px; aspect-ratio:1; border-radius:10px; background:var(--border-soft); }
   .week-day .wd-date{ font-size:10px; color:var(--text-faint); }
   .week-day.today .wd-label{ color:var(--accent); font-weight:700; }
+  .week-strip.compact{ gap:5px; }
+  .week-strip.compact .week-day{ min-width:22px; gap:3px; }
+  .week-strip.compact .wd-cell{ max-width:26px; border-radius:7px; }
+  .week-strip.compact .wd-label{ font-size:9px; }
+  .week-strip.compact .wd-date{ font-size:9px; }
 
   /* ---------- Habit cards ---------- */
   .habits-grid{
@@ -298,8 +303,6 @@
     overflow:hidden;
     text-overflow:ellipsis;
   }
-  .habit-sub{ font-size:11.5px; color:var(--text-faint); margin-top:1px; }
-
   .habit-menu-wrap{ position:relative; }
   .habit-menu{
     position:absolute; right:0; top:calc(100% + 6px);
@@ -366,25 +369,6 @@
   }
   .metric-pill span{ font-size:10px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; }
   .metric-pill.flame b{ color:var(--accent); }
-
-  .trend-badge{
-    font-size:10.5px; padding:2px 7px; border-radius:100px; font-weight:600;
-    display:inline-flex; align-items:center; gap:3px;
-  }
-  .trend-up{ background:rgba(53,208,186,.15); color:var(--good); }
-  .trend-down{ background:rgba(229,86,109,.15); color:var(--danger); }
-  .trend-flat{ background:var(--border-soft); color:var(--text-faint); }
-
-  .mini-heatmap{
-    display:grid;
-    grid-auto-flow:column;
-    grid-template-rows:repeat(7, 9px);
-    gap:2.5px;
-    overflow-x:auto;
-    padding-bottom:2px;
-  }
-  .mini-heatmap .hm-cell{ width:9px;height:9px;border-radius:2.5px; }
-  .mini-heatmap .hm-cell:hover{ transform:none; }
 
   .habit-footer{
     display:flex; justify-content:space-between; align-items:center;
@@ -591,12 +575,12 @@
     <div class="detail-stats" id="detailStats"></div>
 
     <div class="chart-wrap">
-      <h4>Andamento streak (ultimi 60 giorni)</h4>
+      <h4>Andamento streak (ultimi 10 giorni)</h4>
       <div id="lineChart"></div>
     </div>
 
     <div class="heat-wrap">
-      <h4>Heatmap anno · <span id="detailYearLabel"></span></h4>
+      <h4>Heatmap mese · <span id="detailMonthLabel"></span></h4>
       <div class="heatmap-scroll" style="overflow-x:auto;">
         <div class="heatmap-months" id="detailMonths"></div>
         <div class="heatmap-body">
@@ -823,17 +807,7 @@
     return Math.round((totalCompletions(habit) / daysSince) * 100);
   }
 
-  function trend(habit){
-    const today = new Date();
-    let last7 = 0, prev7 = 0;
-    for(let i=0;i<7;i++){ if(habit.completions[fmtDate(addDays(today,-i))]) last7++; }
-    for(let i=7;i<14;i++){ if(habit.completions[fmtDate(addDays(today,-i))]) prev7++; }
-    if(last7 > prev7) return "up";
-    if(last7 < prev7) return "down";
-    return "flat";
-  }
-
-  function streakSeries(habit, days){
+function streakSeries(habit, days){
     const series = [];
     let run = 0;
     const start = addDays(new Date(), -(days-1));
@@ -1041,33 +1015,53 @@
     document.getElementById("activityDetailModalOverlay").classList.remove("open");
   }
 
-  function renderMiniHeatmap(habit, container, weeksCount){
-    const days = [];
-    const today = new Date();
-    const startDow = (today.getDay()+6)%7;
-    const gridEnd = addDays(today, 6-startDow);
-    const totalDays = weeksCount*7;
-    const gridStart = addDays(gridEnd, -(totalDays-1));
-    let d = gridStart;
-    while(d <= gridEnd){ days.push(new Date(d)); d = addDays(d,1); }
-
+  function renderHabitWeekStrip(habit, container){
     container.innerHTML = "";
-    days.forEach(dt=>{
+    const today = new Date(); today.setHours(0,0,0,0);
+    const dow = (today.getDay() + 6) % 7;
+    const monday = addDays(today, -dow);
+    const labels = ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"];
+
+    for(let i=0;i<7;i++){
+      const d = addDays(monday, i);
+      const key = fmtDate(d);
+
+      const wrap = document.createElement("div");
+      wrap.className = "week-day" + (fmtDate(d)===fmtDate(today) ? " today" : "");
+
+      const label = document.createElement("span");
+      label.className = "wd-label";
+      label.textContent = labels[i];
+      wrap.appendChild(label);
+
       const cell = document.createElement("div");
-      cell.className = "hm-cell";
-      const key = fmtDate(dt);
-      if(dt > today){ cell.style.background = "transparent"; }
-      else if(habit.completions[key]){ cell.style.background = habit.color; }
-      else { cell.style.background = "var(--border-soft)"; }
-      cell.title = dt.toLocaleDateString("it-IT");
-      container.appendChild(cell);
-    });
+      cell.className = "wd-cell";
+      if(d > today){
+        cell.style.background = "transparent";
+        cell.style.border = "1.5px dashed var(--border)";
+      } else if(habit.completions[key]){
+        cell.style.background = habit.color;
+      } else {
+        cell.style.background = "var(--border-soft)";
+      }
+      cell.title = `${d.toLocaleDateString("it-IT")} — ${habit.completions[key] ? "completato" : "non completato"}`;
+      wrap.appendChild(cell);
+
+      const dateLabel = document.createElement("span");
+      dateLabel.className = "wd-date";
+      dateLabel.textContent = d.getDate();
+      wrap.appendChild(dateLabel);
+
+      container.appendChild(wrap);
+    }
   }
 
   function renderDetailHeatmap(habit){
-    const year = new Date().getFullYear();
-    document.getElementById("detailYearLabel").textContent = year;
-    const days = buildYearDays(year);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    document.getElementById("detailMonthLabel").textContent = MONTHS_IT[month] + " " + year;
+    const days = buildMonthDays(year, month);
     const container = document.getElementById("detailHeatmap");
     container.innerHTML = "";
     const today = new Date(); today.setHours(0,0,0,0);
@@ -1077,7 +1071,7 @@
       const cell = document.createElement("div");
       cell.className = "hm-cell";
       if(d > today) cell.classList.add("future");
-      if(d.getFullYear() === year){
+      if(d.getFullYear() === year && d.getMonth() === month){
         const key = fmtDate(d);
         if(habit.completions[key]){
           cell.style.background = habit.color;
@@ -1092,9 +1086,20 @@
     });
   }
 
+  function monthProgress(habit){
+    const now = new Date();
+    const year = now.getFullYear(), month = now.getMonth();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    let done = 0;
+    for(let day=1; day<=daysInMonth; day++){
+      if(habit.completions[fmtDate(new Date(year, month, day))]) done++;
+    }
+    return { done, total: daysInMonth };
+  }
+
   // ---------- Line chart (SVG) ----------
   function renderLineChart(habit){
-    const days = 60;
+    const days = 10;
     const series = streakSeries(habit, days);
     const w = 680, h = 160, pad = 20;
     const max = Math.max(1, ...series);
@@ -1131,12 +1136,6 @@
   }
 
   // ---------- Habit cards ----------
-  function trendBadge(t){
-    if(t === "up") return `<span class="trend-badge trend-up">▲ in crescita</span>`;
-    if(t === "down") return `<span class="trend-badge trend-down">▼ in calo</span>`;
-    return `<span class="trend-badge trend-flat">▪ stabile</span>`;
-  }
-
   function renderHabits(){
     const grid = document.getElementById("habitsGrid");
     document.getElementById("habitCountLabel").textContent = state.habits.length + " abitudini";
@@ -1157,9 +1156,6 @@
       const done = !!habit.completions[todayStr()];
       const cs = currentStreak(habit);
       const ms = maxStreak(habit);
-      const rate = completionRate(habit);
-      const tr = trend(habit);
-      const last = Object.keys(habit.completions).filter(k=>habit.completions[k]).sort().pop();
 
       const card = document.createElement("div");
       card.className = "habit-card";
@@ -1169,7 +1165,6 @@
             <div class="habit-icon" style="background:${habit.color}22; color:${habit.color};">${habit.icon}</div>
             <div style="min-width:0;">
               <div class="habit-name">${escapeHtml(habit.name)}</div>
-              <div class="habit-sub">${last ? "ultimo: "+niceDate(last) : "mai completata"} · ${trendBadge(tr)}</div>
             </div>
           </div>
           <div class="habit-menu-wrap">
@@ -1184,7 +1179,7 @@
         <div class="habit-check-row">
           <button class="check-btn ${done?'done':''}" data-action="toggle">${done ? "✓" : ""}</button>
           <div class="habit-check-text">
-            <b>${done ? "Completata oggi" : "Da completare oggi"}</b>
+            <b>${done ? "Anche oggi ce l'ho fatta!" : "Da completare oggi"}</b>
             <span>${cs > 0 ? "🔥 "+cs+" giorni di streak" : "nessuna streak attiva"}</span>
           </div>
         </div>
@@ -1192,10 +1187,9 @@
         <div class="habit-metrics">
           <div class="metric-pill flame"><b>${cs}</b><span>Attuale</span></div>
           <div class="metric-pill"><b>${ms}</b><span>Massima</span></div>
-          <div class="metric-pill"><b>${rate}%</b><span>Costanza</span></div>
         </div>
 
-        <div class="mini-heatmap" data-mini></div>
+        <div class="week-strip compact" data-mini></div>
 
         <div class="habit-footer">
           <button class="link-btn" data-action="detail">📈 Statistiche complete</button>
@@ -1217,7 +1211,7 @@
       card.querySelector('[data-action="detail"]').addEventListener("click", ()=> openDetailModal(habit.id));
 
       grid.appendChild(card);
-      renderMiniHeatmap(habit, card.querySelector("[data-mini]"), 18);
+      renderHabitWeekStrip(habit, card.querySelector("[data-mini]"));
     });
   }
 
@@ -1332,11 +1326,12 @@
     document.getElementById("detailName").textContent = habit.name;
     document.getElementById("detailSub").textContent = "creata il " + niceDate(habit.createdAt);
 
+    const mp = monthProgress(habit);
     document.getElementById("detailStats").innerHTML = `
       <div class="metric-pill flame"><b>${currentStreak(habit)}</b><span>Streak attuale</span></div>
       <div class="metric-pill"><b>${maxStreak(habit)}</b><span>Streak massima</span></div>
       <div class="metric-pill"><b>${totalCompletions(habit)}</b><span>Giorni totali</span></div>
-      <div class="metric-pill"><b>${completionRate(habit)}%</b><span>Completamento</span></div>
+      <div class="metric-pill"><b>${mp.done}/${mp.total}</b><span>Questo mese</span></div>
     `;
 
     renderLineChart(habit);
