@@ -247,6 +247,14 @@
   }
   .hm-cell:hover{ transform:scale(1.35); }
   .hm-cell.future{ opacity:.35; }
+  .hm-cell.fillable{ cursor:pointer; }
+  .hm-cell.fillable:hover{ outline:2px solid var(--accent); outline-offset:1px; }
+
+  .heatmap-scroll.month-view{ min-width:0; overflow-x:visible; }
+  .heatmap-months.month-view{ grid-auto-columns:1fr; }
+  .heatmap-grid.month-view{ grid-auto-columns:1fr; grid-template-rows:repeat(7, 26px); flex:1 1 0; min-width:0; }
+  .heatmap-grid.month-view .hm-cell{ width:100%; height:100%; border-radius:6px; }
+
   .heatmap-legend{
     display:flex; align-items:center; gap:6px; justify-content:flex-end;
     margin-top:10px; font-size:10.5px; color:var(--text-faint);
@@ -581,11 +589,11 @@
 
     <div class="heat-wrap">
       <h4>Heatmap mese · <span id="detailMonthLabel"></span></h4>
-      <div class="heatmap-scroll" style="overflow-x:auto;">
-        <div class="heatmap-months" id="detailMonths"></div>
+      <div class="heatmap-scroll month-view">
+        <div class="heatmap-months month-view" id="detailMonths"></div>
         <div class="heatmap-body">
           <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
-          <div class="heatmap-grid" id="detailHeatmap"></div>
+          <div class="heatmap-grid month-view" id="detailHeatmap"></div>
         </div>
       </div>
     </div>
@@ -649,11 +657,11 @@
     </div>
     <div class="heat-wrap">
       <h4>Questo mese · <span id="activityMonthLabel"></span></h4>
-      <div class="heatmap-scroll" style="overflow-x:auto;">
-        <div class="heatmap-months" id="activityMonthMonths"></div>
+      <div class="heatmap-scroll month-view">
+        <div class="heatmap-months month-view" id="activityMonthMonths"></div>
         <div class="heatmap-body">
           <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
-          <div class="heatmap-grid" id="activityMonthHeatmap"></div>
+          <div class="heatmap-grid month-view" id="activityMonthHeatmap"></div>
         </div>
       </div>
     </div>
@@ -666,6 +674,19 @@
           <div class="heatmap-grid" id="activityYearHeatmap"></div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Backfill Day Modal -->
+<div class="modal-overlay" id="backfillModalOverlay">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-head">
+      <h3 id="backfillModalTitle">Anche il ... hai spinto?</h3>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="backfillNoBtn">No</button>
+      <button class="btn btn-primary" id="backfillYesBtn">Sì</button>
     </div>
   </div>
 </div>
@@ -1077,6 +1098,10 @@ function streakSeries(habit, days){
           cell.style.background = habit.color;
         } else {
           cell.style.background = "var(--border-soft)";
+          if(d <= today){
+            cell.classList.add("fillable");
+            cell.addEventListener("click", ()=> openBackfillModal(habit.id, key));
+          }
         }
         cell.title = `${d.toLocaleDateString("it-IT")} — ${habit.completions[key] ? "completato" : "non completato"}`;
       } else {
@@ -1084,6 +1109,33 @@ function streakSeries(habit, days){
       }
       container.appendChild(cell);
     });
+  }
+
+  // ---------- Backfill past days ----------
+  let backfillContext = null;
+
+  function openBackfillModal(habitId, dateKey){
+    backfillContext = { habitId, dateKey };
+    document.getElementById("backfillModalTitle").textContent = `Anche il ${niceDate(dateKey)} hai spinto?`;
+    document.getElementById("backfillModalOverlay").classList.add("open");
+  }
+
+  function closeBackfillModal(){
+    document.getElementById("backfillModalOverlay").classList.remove("open");
+    backfillContext = null;
+  }
+
+  function confirmBackfill(){
+    if(!backfillContext) return;
+    const habit = state.habits.find(h=>h.id===backfillContext.habitId);
+    if(habit){
+      habit.completions[backfillContext.dateKey] = true;
+      save();
+      renderAll();
+      refreshDetailModal(habit);
+      showToast("Giorno segnato come completato 🔥");
+    }
+    closeBackfillModal();
   }
 
   function monthProgress(habit){
@@ -1101,7 +1153,7 @@ function streakSeries(habit, days){
   function renderLineChart(habit){
     const days = 10;
     const series = streakSeries(habit, days);
-    const w = 680, h = 160, pad = 20;
+    const w = 680, h = 90, pad = 16;
     const max = Math.max(1, ...series);
     const stepX = (w - pad*2) / (days-1);
     const points = series.map((v,i)=>{
@@ -1315,11 +1367,7 @@ function streakSeries(habit, days){
   }
 
   // ---------- Detail modal ----------
-  function openDetailModal(habitId){
-    activeDetailHabitId = habitId;
-    const habit = state.habits.find(h=>h.id===habitId);
-    if(!habit) return;
-    closeAllMenus();
+  function refreshDetailModal(habit){
     document.getElementById("detailIcon").style.background = habit.color+"22";
     document.getElementById("detailIcon").style.color = habit.color;
     document.getElementById("detailIcon").textContent = habit.icon;
@@ -1336,6 +1384,14 @@ function streakSeries(habit, days){
 
     renderLineChart(habit);
     renderDetailHeatmap(habit);
+  }
+
+  function openDetailModal(habitId){
+    activeDetailHabitId = habitId;
+    const habit = state.habits.find(h=>h.id===habitId);
+    if(!habit) return;
+    closeAllMenus();
+    refreshDetailModal(habit);
     document.getElementById("detailModalOverlay").classList.add("open");
   }
 
@@ -1476,6 +1532,10 @@ function streakSeries(habit, days){
     document.getElementById("closeActivityDetailModal").addEventListener("click", closeActivityDetailModal);
     document.getElementById("activityDetailModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="activityDetailModalOverlay") closeActivityDetailModal(); });
 
+    document.getElementById("backfillYesBtn").addEventListener("click", confirmBackfill);
+    document.getElementById("backfillNoBtn").addEventListener("click", closeBackfillModal);
+    document.getElementById("backfillModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="backfillModalOverlay") closeBackfillModal(); });
+
     document.getElementById("menuBtn").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.add("open"));
     document.getElementById("closeDataModal").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.remove("open"));
     document.getElementById("dataModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="dataModalOverlay") e.currentTarget.classList.remove("open"); });
@@ -1495,7 +1555,7 @@ function streakSeries(habit, days){
 
     document.addEventListener("keydown", (e)=>{
       if(e.key === "Escape"){
-        closeHabitModal(); closeDetailModal(); closeActivityDetailModal();
+        closeHabitModal(); closeDetailModal(); closeActivityDetailModal(); closeBackfillModal();
         document.getElementById("dataModalOverlay").classList.remove("open");
         if(document.getElementById("profileModalOverlay").dataset.onboarding !== "1"){
           closeProfileModal();
