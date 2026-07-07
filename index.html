@@ -212,7 +212,7 @@
     box-shadow:var(--shadow-card);
     overflow-x:auto;
   }
-  .heatmap-scroll{ min-width:720px; }
+  .heatmap-scroll{ max-width:100%; }
   .heatmap-months{
     display:grid;
     grid-auto-flow:column;
@@ -823,14 +823,7 @@
     return Object.values(habit.completions).filter(Boolean).length;
   }
 
-  function completionRate(habit){
-    const start = parseDate(habit.createdAt);
-    const today = new Date();
-    const daysSince = Math.max(1, Math.round((today - start)/86400000) + 1);
-    return Math.round((totalCompletions(habit) / daysSince) * 100);
-  }
-
-function streakSeries(habit, days){
+  function streakSeries(habit, days){
     const series = [];
     let run = 0;
     const start = addDays(new Date(), -(days-1));
@@ -849,8 +842,17 @@ function streakSeries(habit, days){
     const bestCurrent = habits.reduce((m,h)=>Math.max(m, currentStreak(h)), 0);
     const bestMax = habits.reduce((m,h)=>Math.max(m, maxStreak(h)), 0);
     const totalDays = habits.reduce((s,h)=>s + totalCompletions(h), 0);
-    const avgRate = totalHabits ? Math.round(habits.reduce((s,h)=>s+completionRate(h),0)/totalHabits) : 0;
-    return { totalHabits, bestCurrent, bestMax, totalDays, avgRate };
+
+    const today = new Date(); today.setHours(0,0,0,0);
+    const monday = addDays(today, -((today.getDay()+6)%7));
+    let weekDone = 0;
+    for(let i=0;i<7;i++){
+      const key = fmtDate(addDays(monday,i));
+      habits.forEach(h=>{ if(h.completions[key]) weekDone++; });
+    }
+    const weekTotal = totalHabits * 7;
+
+    return { totalHabits, bestCurrent, bestMax, totalDays, weekDone, weekTotal };
   }
 
   // ---------- Rendering: stats ----------
@@ -870,13 +872,13 @@ function streakSeries(habit, days){
       </div>
       <div class="stat-card">
         <div class="stat-glyph">📆</div>
-        <div class="stat-label">Giorni totali completati</div>
+        <div class="stat-label">Attività totali completate</div>
         <div class="stat-value">${s.totalDays}</div>
       </div>
       <div class="stat-card">
         <div class="stat-glyph">📊</div>
-        <div class="stat-label">Completamento medio</div>
-        <div class="stat-value">${s.avgRate}<small>%</small></div>
+        <div class="stat-label">Questa settimana</div>
+        <div class="stat-value">${s.weekDone}<small>/${s.weekTotal}</small></div>
       </div>
     `;
   }
