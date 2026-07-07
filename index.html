@@ -251,8 +251,10 @@
   .hm-cell.fillable:hover{ outline:2px solid var(--accent); outline-offset:1px; }
 
   .heatmap-scroll.month-view{ min-width:0; overflow-x:visible; }
-  .heatmap-months.month-view{ grid-auto-columns:1fr; }
+  .heatmap-months.month-view{ display:none; }
   .heatmap-grid.month-view{ grid-auto-columns:1fr; grid-template-rows:repeat(7, 26px); flex:1 1 0; min-width:0; }
+  .heatmap-daylabels.month-view{ grid-template-rows:repeat(7, 26px); }
+  .heatmap-daylabels.month-view span{ line-height:26px; }
   .heatmap-grid.month-view .hm-cell{ width:100%; height:100%; border-radius:6px; }
 
   .heatmap-legend{
@@ -592,7 +594,7 @@
       <div class="heatmap-scroll month-view">
         <div class="heatmap-months month-view" id="detailMonths"></div>
         <div class="heatmap-body">
-          <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
+          <div class="heatmap-daylabels month-view"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
           <div class="heatmap-grid month-view" id="detailHeatmap"></div>
         </div>
       </div>
@@ -660,7 +662,7 @@
       <div class="heatmap-scroll month-view">
         <div class="heatmap-months month-view" id="activityMonthMonths"></div>
         <div class="heatmap-body">
-          <div class="heatmap-daylabels"><span></span><span>Lun</span><span></span><span>Mer</span><span></span><span>Ven</span><span></span></div>
+          <div class="heatmap-daylabels month-view"><span>Lun</span><span>Mar</span><span>Mer</span><span>Gio</span><span>Ven</span><span>Sab</span><span>Dom</span></div>
           <div class="heatmap-grid month-view" id="activityMonthHeatmap"></div>
         </div>
       </div>
@@ -1094,16 +1096,13 @@ function streakSeries(habit, days){
       if(d > today) cell.classList.add("future");
       if(d.getFullYear() === year && d.getMonth() === month){
         const key = fmtDate(d);
-        if(habit.completions[key]){
-          cell.style.background = habit.color;
-        } else {
-          cell.style.background = "var(--border-soft)";
-          if(d <= today){
-            cell.classList.add("fillable");
-            cell.addEventListener("click", ()=> openBackfillModal(habit.id, key));
-          }
+        const done = !!habit.completions[key];
+        cell.style.background = done ? habit.color : "var(--border-soft)";
+        if(d <= today){
+          cell.classList.add("fillable");
+          cell.addEventListener("click", ()=> openBackfillModal(habit.id, key, done ? "remove" : "add"));
         }
-        cell.title = `${d.toLocaleDateString("it-IT")} — ${habit.completions[key] ? "completato" : "non completato"}`;
+        cell.title = `${d.toLocaleDateString("it-IT")} — ${done ? "completato" : "non completato"}`;
       } else {
         cell.style.background = "transparent";
       }
@@ -1114,9 +1113,11 @@ function streakSeries(habit, days){
   // ---------- Backfill past days ----------
   let backfillContext = null;
 
-  function openBackfillModal(habitId, dateKey){
-    backfillContext = { habitId, dateKey };
-    document.getElementById("backfillModalTitle").textContent = `Anche il ${niceDate(dateKey)} hai spinto?`;
+  function openBackfillModal(habitId, dateKey, mode){
+    backfillContext = { habitId, dateKey, mode };
+    document.getElementById("backfillModalTitle").textContent = mode === "remove"
+      ? `Vuoi togliere l'attività del ${niceDate(dateKey)}?`
+      : `Anche il ${niceDate(dateKey)} hai spinto?`;
     document.getElementById("backfillModalOverlay").classList.add("open");
   }
 
@@ -1129,11 +1130,16 @@ function streakSeries(habit, days){
     if(!backfillContext) return;
     const habit = state.habits.find(h=>h.id===backfillContext.habitId);
     if(habit){
-      habit.completions[backfillContext.dateKey] = true;
+      if(backfillContext.mode === "remove"){
+        delete habit.completions[backfillContext.dateKey];
+        showToast("Giorno rimosso");
+      } else {
+        habit.completions[backfillContext.dateKey] = true;
+        showToast("Giorno segnato come completato 🔥");
+      }
       save();
       renderAll();
       refreshDetailModal(habit);
-      showToast("Giorno segnato come completato 🔥");
     }
     closeBackfillModal();
   }
@@ -1180,9 +1186,7 @@ function streakSeries(habit, days){
         ${gridLines}
         <path d="${areaPath}" fill="url(#areaGrad-${habit.id})" stroke="none"/>
         <path d="${linePath}" fill="none" stroke="${habit.color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-        <text x="${pad}" y="12" fill="var(--text-faint)" font-size="10">max ${max}g</text>
         <text x="${w-pad}" y="${h-6}" fill="var(--text-faint)" font-size="10" text-anchor="end">oggi</text>
-        <text x="${pad}" y="${h-6}" fill="var(--text-faint)" font-size="10">-${days}g</text>
       </svg>`;
     document.getElementById("lineChart").innerHTML = svg;
   }
