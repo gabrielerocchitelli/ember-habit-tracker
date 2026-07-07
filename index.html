@@ -647,6 +647,7 @@
       </select>
     </div>
     <p style="font-size:13px;color:var(--text-dim);margin-top:0;">Tutti i dati sono salvati solo in questo browser (localStorage). Esporta regolarmente un backup.</p>
+    <p id="lastBackupInfo" style="font-size:12px;color:var(--text-faint);margin:-6px 0 14px;"></p>
     <div class="modal-actions" style="flex-direction:column;">
       <button class="btn" id="exportJsonBtn">⬇️ Esporta JSON (backup completo)</button>
       <button class="btn" id="exportCsvBtn">⬇️ Esporta CSV (completamenti)</button>
@@ -720,6 +721,20 @@
   </div>
 </div>
 
+<!-- Backup Reminder Modal -->
+<div class="modal-overlay" id="backupReminderModalOverlay">
+  <div class="modal" style="max-width:380px;">
+    <div class="modal-head">
+      <h3>💾 Ricordati il backup</h3>
+    </div>
+    <p id="backupReminderText" style="font-size:13.5px;color:var(--text-dim);margin-top:0;"></p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="backupReminderLaterBtn">Più tardi</button>
+      <button class="btn btn-primary" id="backupReminderExportBtn">⬇️ Esporta ora</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -729,6 +744,9 @@
   const STORAGE_KEY = "ember_habit_tracker_v1";
   const THEME_KEY = "ember_habit_theme_v1";
   const PROFILE_KEY = "ember_habit_profile_v1";
+  const BACKUP_KEY = "ember_habit_last_backup_v1";
+  const BACKUP_PROMPT_KEY = "ember_habit_backup_prompt_shown_v1";
+  const BACKUP_REMINDER_DAYS = 7;
 
   const ICONS = ["✅","💪","📚","🧘","🏃","💧","🥗","😴","✍️","🎯","🧹","🎸","🧠","🚭","💰","🌱"];
   const COLORS = ["#f2a154","#3fd6b4","#a48af0","#ee7597","#5fb0f2","#e0c341","#7fd15e","#f27f6b"];
@@ -1583,6 +1601,7 @@
 
   function exportJson(){
     downloadBlob(JSON.stringify(state, null, 2), `ember-backup-${todayStr()}.json`, "application/json");
+    markBackupDone();
     showToast("Backup JSON esportato");
   }
 
@@ -1608,6 +1627,7 @@
         state = parsed;
         save();
         renderAll();
+        markBackupDone();
         showToast("Backup importato con successo");
         document.getElementById("dataModalOverlay").classList.remove("open");
       }catch(err){
@@ -1625,6 +1645,51 @@
     renderAll();
     showToast("Dati cancellati");
     document.getElementById("dataModalOverlay").classList.remove("open");
+  }
+
+  // ---------- Backup reminders ----------
+  function daysSince(dateStr){
+    if(!dateStr) return null;
+    const d = parseDate(dateStr);
+    const today = new Date(); today.setHours(0,0,0,0);
+    return Math.floor((today - d) / 86400000);
+  }
+
+  function lastBackupLabel(){
+    const days = daysSince(localStorage.getItem(BACKUP_KEY));
+    if(days === null) return "mai";
+    if(days === 0) return "oggi";
+    if(days === 1) return "ieri";
+    return `${days} giorni fa`;
+  }
+
+  function markBackupDone(){
+    localStorage.setItem(BACKUP_KEY, todayStr());
+    updateBackupInfo();
+  }
+
+  function updateBackupInfo(){
+    const el = document.getElementById("lastBackupInfo");
+    if(el) el.textContent = "Ultimo backup: " + lastBackupLabel();
+  }
+
+  function maybeShowBackupReminder(){
+    if(state.habits.length === 0) return;
+    if(localStorage.getItem(BACKUP_PROMPT_KEY) === todayStr()) return;
+    const days = daysSince(localStorage.getItem(BACKUP_KEY));
+    if(days === null || days >= BACKUP_REMINDER_DAYS){
+      document.getElementById("backupReminderText").textContent = days === null
+        ? "Non hai ancora esportato un backup. I tuoi dati vivono solo su questo dispositivo: se cancelli la cache o cambi telefono li perderesti per sempre."
+        : `Sono passati ${days} giorni dall'ultimo backup. Vuoi esportarlo ora per non rischiare di perdere le tue abitudini?`;
+      document.getElementById("backupReminderModalOverlay").classList.add("open");
+    }
+  }
+
+  function closeBackupReminder(){
+    const overlay = document.getElementById("backupReminderModalOverlay");
+    if(!overlay.classList.contains("open")) return;
+    overlay.classList.remove("open");
+    localStorage.setItem(BACKUP_PROMPT_KEY, todayStr());
   }
 
   // ---------- Profile ----------
@@ -1688,6 +1753,8 @@
 
     if(!profile.name){
       openProfileModal(true);
+    } else {
+      maybeShowBackupReminder();
     }
 
     document.getElementById("addHabitBtn").addEventListener("click", ()=>openHabitModal(null));
@@ -1708,9 +1775,16 @@
     document.getElementById("backfillNoBtn").addEventListener("click", closeBackfillModal);
     document.getElementById("backfillModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="backfillModalOverlay") closeBackfillModal(); });
 
-    document.getElementById("menuBtn").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.add("open"));
+    document.getElementById("menuBtn").addEventListener("click", ()=>{
+      updateBackupInfo();
+      document.getElementById("dataModalOverlay").classList.add("open");
+    });
     document.getElementById("closeDataModal").addEventListener("click", ()=>document.getElementById("dataModalOverlay").classList.remove("open"));
     document.getElementById("dataModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="dataModalOverlay") e.currentTarget.classList.remove("open"); });
+
+    document.getElementById("backupReminderLaterBtn").addEventListener("click", closeBackupReminder);
+    document.getElementById("backupReminderExportBtn").addEventListener("click", ()=>{ exportJson(); closeBackupReminder(); });
+    document.getElementById("backupReminderModalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="backupReminderModalOverlay") closeBackupReminder(); });
 
     document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
     document.getElementById("exportCsvBtn").addEventListener("click", exportCsv);
@@ -1727,7 +1801,7 @@
 
     document.addEventListener("keydown", (e)=>{
       if(e.key === "Escape"){
-        closeHabitModal(); closeDetailModal(); closeActivityDetailModal(); closeBackfillModal();
+        closeHabitModal(); closeDetailModal(); closeActivityDetailModal(); closeBackfillModal(); closeBackupReminder();
         document.getElementById("dataModalOverlay").classList.remove("open");
         if(document.getElementById("profileModalOverlay").dataset.onboarding !== "1"){
           closeProfileModal();
